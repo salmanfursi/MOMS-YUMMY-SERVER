@@ -1,0 +1,6 @@
+when you find any bson error like bson 24bson hex string then be sure that 
+the end pioint are correct like:
+path: /allpayments {its an correct path }
+
+i first time give this path like : /all/payments  
+{that time its give the erro like bson err 24 hes string so be sure your api endpoint match clien and server and make sure it hase single / route dont use multiple / on this endpoint } 
