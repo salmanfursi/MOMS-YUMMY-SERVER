@@ -5,7 +5,7 @@ const cors = require('cors')
 require('dotenv').config()
 const stripe = require("stripe")(process.env.PAYMENT_SECRET_KEY);
 
-const helmet = require('helmet');
+// const helmet = require('helmet');
 
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const port = process.env.port || 5000
@@ -153,10 +153,13 @@ async function run() {
         const user = await usersCollection.findOne(query);
 
         // Check if the user exists and has an admin role
-        const result = { admin: user?.role === "admin" };
+        if ( user?.role === "admin" ) {
+           return res.send(({ admin: true }));
+        }
+        else {
+           return res.send(({ admin: false }));
+        }
 
-
-        res.send(result);
       } catch (error) {
 
         res.status(500).send({ error: 'Internal Server Error' });
@@ -280,35 +283,79 @@ async function run() {
       res.send(result);
     });
     // all users
-    app.get('/admin-stats',varifyJWT,varifyAdmin, async (req, res) => {
+    app.get('/admin-stats', varifyJWT, varifyAdmin, async (req, res) => {
       const users = await usersCollection.estimatedDocumentCount();
       const products = await menuCollection.estimatedDocumentCount();
       const orders = await paymentCollection.estimatedDocumentCount();
 
       // #1:--to get total price
-       const payment = await paymentCollection.aggregate([
-         {
-           $group: {
-             _id: null,
-             totalPrice: { $sum: '$price' }
-            }
+      const payment = await paymentCollection.aggregate([
+        {
+          $group: {
+            _id: null,
+            totalPrice: { $sum: '$price' }
           }
-        ]).toArray();
-        const ravenue =payment[0].totalPrice
+        }
+      ]).toArray();
+      const ravenue = payment[0].totalPrice
 
       // #2:--to get totalprice
       // const payments = await paymentCollection.find().toArray();
       // const ravenue =payments.reduce((sum, payment)=>sum + payment.price,0)
-
 
       res.send({
         ravenue,
         users,
         products,
         orders,
-        
+
       });
     });
+
+    //order stats
+    app.get('/order-stats', varifyJWT,varifyAdmin,async (req, res) => {
+
+      const pipeLine = ([
+        {
+          $unwind: '$menuItems' // Unwind the menuItems array
+        },
+        {
+          $lookup: {
+            from: 'menu',  // Collection name for Menu
+            localField: 'menuItems',
+            foreignField: '_id',
+            as: 'menuItemsData'
+          }
+        },
+        {
+          $unwind: '$menuItemsData' // Unwind the menuItemsData array
+        },
+        {
+          $group: {
+            _id: '$menuItemsData.category',
+            count: { $sum: 1 },
+            total: { $sum: '$menuItemsData.price' }
+          }
+        },
+        {
+          $project: {
+            category: '$_id',
+            count: 1,
+            total: { $round: ['$total', 2] } // Round total to two decimal places
+          }
+        },
+        {
+          $unset: '_id' // Remove the _id field from the output
+        }
+      ]);
+
+      const result=await paymentCollection.aggregate(pipeLine).toArray()
+      res.json(result);
+
+
+    })
+
+
 
     //all order
     app.get('/payments', async (req, res) => {
@@ -355,3 +402,56 @@ app.listen(port, (req, res) => {
   console.log(`moms server running on port ${port}`)
 
 })
+
+
+
+
+
+
+
+
+
+
+/**
+ * 
+ * for starting jwt first going to jwt website
+ *  then node select koro
+ *  then github er modde jao 
+ * then leka pabe ki babe ki korte hoi
+ *  first require korte  hoi
+ * 
+ *     ---------------------------
+ *        jwt secret genarator
+ *     ---------------------------
+ * 
+ * first type    node  then down word then get secret.
+ * 
+ * require('crypto').randomBytes(64).tostring('hex')
+ * 
+ * 
+ * ------------------------
+ *     env
+ * ------------------------
+ * DB_USER=momsDB
+ * DB_PASS=qjo5mjrd8GOQ81pP
+ *
+ * 
+ *ACCESS_TOKEN_SECRET=955db8e8885ae17fb66ca6e49c9f7a554c6b4c99c3aa825b48af79eddf66944da731c58561628ec19332f0e7a110573ff71e583966fbff77b8f16f9e2eb3e238
+ * 
+ * 
+ * 
+ * 
+ * 
+ * 
+ * 
+ * 
+ * 
+ * 
+ * when you find any bson error like bson 24bson hex string then be sure that 
+the end endpioint are correct like:
+path: /allpayments {its an correct path } or network
+
+i first time give this path like : /all/payments  
+{that time its give the erro like bson err 24 hes string so be sure your api endpoint match clien and server and make sure it hase single / route dont use multiple / on this endpoint } 
+ * 
+ **/ 
